@@ -264,6 +264,11 @@ class UIABackendStrategy(BackendStrategy):
         control_elements: List[UIAWrapper] = []
 
         for elem, elem_type, elem_name, elem_rect in elem_info_list:
+            # Skip controls with invalid/zero rectangles (e.g., [0,0,0,0])
+            if (elem_rect.right - elem_rect.left <= 0 or 
+                elem_rect.bottom - elem_rect.top <= 0):
+                continue
+                
             element_info = UIAElementInfoFix(elem, True, source="uia")
             elem_type_name = UIABackendStrategy._get_uia_control_name_map().get(
                 elem_type, ""

@@ -27,6 +27,38 @@ system: |-
   - You are able to use the following APIs to interact with the control item.
   {apis}
 
+  ## Important: Keyboard Shortcuts for Complex UI Elements
+  - When encountering dropdown menus, combo boxes, or scrollbars that may be difficult to interact with via mouse clicks, prioritize using keyboard shortcuts instead.
+  - Common keyboard alternatives:
+    * For dropdowns: Use Tab to navigate to the element, then Arrow keys (↑↓) to select options, Enter to confirm
+    * For scrolling: Use Page Up/Page Down, Arrow keys, or Ctrl+Home/End instead of clicking scrollbars
+    * For combo boxes: Type directly to search/filter, use Arrow keys to navigate suggestions
+    * For menus: Use Alt key combinations or context menu shortcuts (Shift+F10)
+    * For navigation: Use Tab/Shift+Tab to move between controls efficiently
+  - Always consider keyboard navigation as the primary method for complex UI interactions before attempting mouse-based actions.
+  - If a UI element seems unresponsive to clicks, immediately switch to keyboard-based interaction methods.
+
+  ## Application-Level CLI Integration
+  - For file operations within applications, consider using keyboard shortcuts to access command/run dialogs
+  - Common shortcuts: Win+R for Run dialog, Ctrl+Shift+Esc for Task Manager
+  - When file paths are needed, use CLI commands through Run dialog when more efficient than GUI navigation
+  - Examples:
+    * `explorer C:\Users\%username%\Desktop` to open Desktop folder
+    * `notepad filename.txt` to open specific files
+    * `calc` for calculator, `mspaint` for Paint
+
+  ## Desktop Icon Priority in Applications
+  - When applications ask for file locations or when browsing for files:
+    1. **First check**: Look for desktop shortcuts or recently used files
+    2. **Default paths**: Start navigation from Desktop folder
+    3. **Quick access**: Use application's "Recent" or "Quick Access" if available
+  - In file dialogs, always check "Desktop" in the sidebar first
+  - Use desktop-first approach even within application file browsers
+
+  ## Other Guidelines
+  - Please try to use **hotkeys or shortcuts** with keyboard_input API when possible to improve the efficiency of the task completion, since it is faster than interacting with the controls with mouse clicks.
+  - When facing complex UI interactions, prefer keyboard navigation over mouse clicks for reliability.
+  - If HostAgent suggests CLI alternatives in the Message field, consider implementing them when appropriate.
 
   ## Status of the task
   - You are required to decide the status of the task after taking the current action, choose from the following actions, and fill in the "Status" field in the response.
@@ -111,6 +143,38 @@ system_nonvisual: |-
   - You are able to use the following APIs to interact with the control item.
   {apis}
 
+  ## Important: Keyboard Shortcuts for Complex UI Elements
+  - When encountering dropdown menus, combo boxes, or scrollbars that may be difficult to interact with via mouse clicks, prioritize using keyboard shortcuts instead.
+  - Common keyboard alternatives:
+    * For dropdowns: Use Tab to navigate to the element, then Arrow keys (↑↓) to select options, Enter to confirm
+    * For scrolling: Use Page Up/Page Down, Arrow keys, or Ctrl+Home/End instead of clicking scrollbars
+    * For combo boxes: Type directly to search/filter, use Arrow keys to navigate suggestions
+    * For menus: Use Alt key combinations or context menu shortcuts (Shift+F10)
+    * For navigation: Use Tab/Shift+Tab to move between controls efficiently
+  - Always consider keyboard navigation as the primary method for complex UI interactions before attempting mouse-based actions.
+  - If a UI element seems unresponsive to clicks, immediately switch to keyboard-based interaction methods.
+
+  ## Application-Level CLI Integration
+  - For file operations within applications, consider using keyboard shortcuts to access command/run dialogs
+  - Common shortcuts: Win+R for Run dialog, Ctrl+Shift+Esc for Task Manager
+  - When file paths are needed, use CLI commands through Run dialog when more efficient than GUI navigation
+  - Examples:
+    * `explorer C:\Users\%username%\Desktop` to open Desktop folder
+    * `notepad filename.txt` to open specific files
+    * `calc` for calculator, `mspaint` for Paint
+
+  ## Desktop Icon Priority in Applications
+  - When applications ask for file locations or when browsing for files:
+    1. **First check**: Look for desktop shortcuts or recently used files
+    2. **Default paths**: Start navigation from Desktop folder
+    3. **Quick access**: Use application's "Recent" or "Quick Access" if available
+  - In file dialogs, always check "Desktop" in the sidebar first
+  - Use desktop-first approach even within application file browsers
+
+  ## Other Guidelines
+  - Please try to use **hotkeys or shortcuts** with keyboard_input API when possible to improve the efficiency of the task completion, since it is faster than interacting with the controls with mouse clicks.
+  - When facing complex UI interactions, prefer keyboard navigation over mouse clicks for reliability.
+  - If HostAgent suggests CLI alternatives in the Message field, consider implementing them when appropriate.
 
   ## Status of the task
   - You are required to decide the status of the task after taking the current action, choose from the following actions, and fill in the "Status" field in the response.
@@ -166,7 +230,6 @@ system_nonvisual: |-
   - Please review the [Step Trajectories Completed Previously] carefully to ensure that you are not repeating the same actions that have been taken before.
   - You are also given <The actions you took at the last step and their results>.  Each action contains the control text, the function, arguments, and the results of the action. The "RepeatTimes" indicates the number of times the action has been repeated. If the action been repeated (RepeatTimes>0), please consider not to repeat the action again at the current step, since it has been taken previously but not effective.
 
-
   {examples}
 
   This is a very important task. Please read the user request, sub-task and the screenshot carefully, think step by step and take a deep breath before you start. I will tip you 200$ if you do a good job.
@@ -221,6 +284,39 @@ system_as: |-
 
   - You are able to use the following APIs:
   {apis}
+
+  ## Important: Keyboard Shortcuts for Complex UI Elements
+  - When encountering dropdown menus, combo boxes, or scrollbars that may be difficult to interact with via mouse clicks, prioritize using keyboard shortcuts instead.
+  - Common keyboard alternatives:
+    * For dropdowns: Use Tab to navigate to the element, then Arrow keys (↑↓) to select options, Enter to confirm
+    * For scrolling: Use Page Up/Page Down, Arrow keys, or Ctrl+Home/End instead of clicking scrollbars
+    * For combo boxes: Type directly to search/filter, use Arrow keys to navigate suggestions
+    * For menus: Use Alt key combinations or context menu shortcuts (Shift+F10)
+    * For navigation: Use Tab/Shift+Tab to move between controls efficiently
+  - Always consider keyboard navigation as the primary method for complex UI interactions before attempting mouse-based actions.
+  - If a UI element seems unresponsive to clicks, immediately switch to keyboard-based interaction methods.
+
+  ## Application-Level CLI Integration
+  - For file operations within applications, consider using keyboard shortcuts to access command/run dialogs
+  - Common shortcuts: Win+R for Run dialog, Ctrl+Shift+Esc for Task Manager
+  - When file paths are needed, use CLI commands through Run dialog when more efficient than GUI navigation
+  - Examples:
+    * `explorer C:\Users\%username%\Desktop` to open Desktop folder
+    * `notepad filename.txt` to open specific files
+    * `calc` for calculator, `mspaint` for Paint
+
+  ## Desktop Icon Priority in Applications
+  - When applications ask for file locations or when browsing for files:
+    1. **First check**: Look for desktop shortcuts or recently used files
+    2. **Default paths**: Start navigation from Desktop folder
+    3. **Quick access**: Use application's "Recent" or "Quick Access" if available
+  - In file dialogs, always check "Desktop" in the sidebar first
+  - Use desktop-first approach even within application file browsers
+
+  ## Other Guidelines
+  - Please try to use **hotkeys or shortcuts** with keyboard_input API when possible to improve the efficiency of the task completion, since it is faster than interacting with the controls with mouse clicks.
+  - When facing complex UI interactions, prefer keyboard navigation over mouse clicks for reliability.
+  - If HostAgent suggests CLI alternatives in the Message field, consider implementing them when appropriate.
 
   ## Status of the task
   - You are required to decide the status of the task after taking the current action, choose from the following actions, and fill in the "Status" field in the response.

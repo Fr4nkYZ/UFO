@@ -53,6 +53,7 @@ PRICES: {
     "claude/claude-3-5-sonnet-20241022": {"input": 0.0003, "output": 0.0015},
     "claude/claude-3-5-sonnet": {"input": 0.0003, "output": 0.0015},
     "claude/claude-3-5-opus": {"input": 0.0015, "output": 0.0075},
+    "claude/claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
 }
 
 
