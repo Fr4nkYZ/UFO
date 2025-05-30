@@ -341,7 +341,7 @@ class AppAgentProcessor(BaseProcessor):
 
             # Capture the desktop screenshot for all screens.
             self.photographer.capture_desktop_screen_screenshot(
-                all_screens=True, save_path=desktop_save_path
+                all_screens=False, save_path=desktop_save_path
             )
 
         # If the configuration is set to include the last screenshot with selected controls tagged, save the last screenshot.
