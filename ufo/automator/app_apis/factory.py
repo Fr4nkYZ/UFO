@@ -7,7 +7,7 @@ from ufo.automator.app_apis.basic import WinCOMReceiverBasic
 from ufo.automator.app_apis.excel.excelclient import ExcelWinCOMReceiver
 from ufo.automator.app_apis.powerpoint.powerpointclient import PowerPointWinCOMReceiver
 from ufo.automator.app_apis.shell.shell_client import ShellReceiver
-from ufo.automator.app_apis.web.webclient import WebReceiver
+# from ufo.automator.app_apis.web.webclient import WebReceiver
 from ufo.automator.app_apis.word.wordclient import WordWinCOMReceiver
 from ufo.automator.basic import ReceiverBasic, ReceiverFactory
 from ufo.automator.puppeteer import ReceiverManager

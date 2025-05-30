@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import functools
 import time
+import logging
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, List, Optional, cast
 
@@ -21,6 +22,11 @@ from pywinauto.uia_element_info import UIAElementInfo
 from ufo.config.config import Config
 
 configs = Config.get_instance().config_data
+
+# Enhanced error handling configuration
+ENHANCED_ERROR_HANDLING = configs.get("UI_ENHANCED_ERROR_HANDLING", True)
+MAX_RETRY_ATTEMPTS = configs.get("UI_MAX_RETRY_ATTEMPTS", 3)
+RETRY_DELAY_SECONDS = configs.get("UI_RETRY_DELAY_SECONDS", 0.5)
 
 
 class BackendFactory:
@@ -167,8 +173,55 @@ class UIAElementInfoFix(UIAElementInfo):
 
 class UIABackendStrategy(BackendStrategy):
     """
-    The backend strategy for UIA.
+    The backend strategy for UIA with enhanced error handling.
     """
+    
+    MAX_RETRIES = MAX_RETRY_ATTEMPTS
+    RETRY_DELAY = RETRY_DELAY_SECONDS
+    
+    @staticmethod
+    def _is_window_valid(window: UIAWrapper) -> bool:
+        """
+        Check if window is still valid and accessible.
+        :param window: The window to check
+        :return: True if window is valid, False otherwise
+        """
+        try:
+            # Try to access basic properties to verify window is still valid
+            window.is_enabled()
+            window.element_info.rectangle
+            return True
+        except Exception as e:
+            logging.debug(f"Window validation failed: {e}")
+            return False
+    
+    @staticmethod
+    def _handle_com_error(error: Exception, window: UIAWrapper, retry_count: int) -> Optional[str]:
+        """
+        Handle COM errors with appropriate logging and recovery strategy.
+        :param error: The COM error that occurred
+        :param window: The window being processed
+        :param retry_count: Current retry attempt
+        :return: Error message or None if should retry
+        """
+        error_code = getattr(error, 'hresult', None)
+        
+        # Common COM error codes and their meanings
+        error_messages = {
+            -2146233083: "UI element access denied or window destroyed",
+            -2147024809: "Invalid parameter or window handle",
+            -2147467259: "Unspecified error in COM operation",
+            -2147023728: "Access denied to UI element",
+        }
+        
+        error_msg = error_messages.get(error_code, f"Unknown COM error: {error_code}")
+        
+        if retry_count < UIABackendStrategy.MAX_RETRIES:
+            logging.warning(f"COM error on retry {retry_count + 1}: {error_msg}. Retrying...")
+            return None  # Signal to retry
+        else:
+            logging.error(f"COM error after {UIABackendStrategy.MAX_RETRIES} retries: {error_msg}")
+            return error_msg
 
     def get_desktop_windows(self, remove_empty: bool) -> List[UIAWrapper]:
         """
@@ -208,31 +261,72 @@ class UIABackendStrategy(BackendStrategy):
         depth: int = 0,
     ) -> List[UIAWrapper]:
         """
-        Find control elements in descendants of the window for uia backend.
-        :param window: The window to find control elements.
-        :param control_type_list: The control types to find.
-        :param class_name_list: The class names to find.
-        :param title_list: The titles to find.
-        :param is_visible: Whether the control elements are visible.
-        :param is_enabled: Whether the control elements are enabled.
-        :param depth: The depth of the descendants to find.
-        :return: The control elements found.
+        Find control elements in descendants of the window for uia backend with enhanced error handling.
         """
-
-        try:
-            window.is_enabled()
-        except:
+        if window is None:
+            return []
+            
+        # Pre-validate window
+        if not self._is_window_valid(window):
+            logging.warning("Window is no longer valid, skipping control search")
             return []
 
         assert (
             class_name_list is None or len(class_name_list) == 0
         ), "class_name_list is not supported for UIA backend"
 
+        for retry_count in range(self.MAX_RETRIES):
+            try:
+                return self._find_controls_with_cache(
+                    window, control_type_list, is_visible, is_enabled
+                )
+                
+            except Exception as error:
+                # Handle COM errors specifically
+                if hasattr(error, 'hresult'):
+                    error_msg = self._handle_com_error(error, window, retry_count)
+                    if error_msg is None:  # Should retry
+                        time.sleep(self.RETRY_DELAY * (retry_count + 1))  # Exponential backoff
+                        
+                        # Re-validate window before retry
+                        if not self._is_window_valid(window):
+                            logging.warning("Window became invalid during retry, aborting")
+                            return []
+                        continue
+                    else:
+                        logging.error(f"Final COM error: {error_msg}")
+                        return []
+                else:
+                    # Non-COM error, log and retry with shorter delay
+                    logging.warning(f"Non-COM error on retry {retry_count + 1}: {str(error)}")
+                    if retry_count < self.MAX_RETRIES - 1:
+                        time.sleep(0.1)
+                        continue
+                    else:
+                        logging.error(f"Final error after retries: {str(error)}")
+                        return []
+        
+        return []
+
+    def _find_controls_with_cache(
+        self,
+        window: UIAWrapper,
+        control_type_list: List[str],
+        is_visible: bool,
+        is_enabled: bool
+    ) -> List[UIAWrapper]:
+        """
+        Core method to find controls using cache with proper error handling.
+        """
         _, iuia_dll = UIABackendStrategy._get_uia_defs()
         window_elem_info = cast(UIAElementInfo, window.element_info)
         window_elem_com_ref = cast(
             UIAutomationClient_dll.IUIAutomationElement, window_elem_info._element
         )
+
+        # Validate COM reference
+        if window_elem_com_ref is None:
+            raise ValueError("Window COM reference is None")
 
         condition = UIABackendStrategy._get_control_filter_condition(
             control_type_list,
@@ -242,45 +336,82 @@ class UIABackendStrategy(BackendStrategy):
 
         cache_request = UIABackendStrategy._get_cache_request()
 
+        # The critical COM call that may fail
         com_elem_array = window_elem_com_ref.FindAllBuildCache(
             scope=iuia_dll.TreeScope_Descendants,
             condition=condition,
             cacheRequest=cache_request,
         )
 
-        elem_info_list = [
-            (
-                elem,
-                elem.CachedControlType,
-                elem.CachedName,
-                elem.CachedBoundingRectangle,
-            )
-            for elem in (
-                com_elem_array.GetElement(n)
-                for n in range(min(com_elem_array.Length, 500))
-            )
-        ]
+        if com_elem_array is None:
+            logging.warning("FindAllBuildCache returned None")
+            return []
 
+        # Process elements with additional error handling
+        return self._process_cached_elements(com_elem_array)
+
+    def _process_cached_elements(self, com_elem_array) -> List[UIAWrapper]:
+        """
+        Process cached elements with individual error handling.
+        """
         control_elements: List[UIAWrapper] = []
+        
+        try:
+            array_length = min(com_elem_array.Length, 500)
+        except Exception as e:
+            logging.error(f"Failed to get array length: {e}")
+            return []
 
-        for elem, elem_type, elem_name, elem_rect in elem_info_list:
-            # Skip controls with invalid/zero rectangles (e.g., [0,0,0,0])
-            if (elem_rect.right - elem_rect.left <= 0 or 
-                elem_rect.bottom - elem_rect.top <= 0):
+        for n in range(array_length):
+            try:
+                elem = com_elem_array.GetElement(n)
+                if elem is None:
+                    continue
+                    
+                # Extract cached properties with error handling
+                try:
+                    elem_type = elem.CachedControlType
+                    elem_name = elem.CachedName
+                    elem_rect = elem.CachedBoundingRectangle
+                except Exception as e:
+                    logging.debug(f"Failed to get cached properties for element {n}: {e}")
+                    continue
+
+                # Skip controls with invalid/zero rectangles
+                if (elem_rect.right - elem_rect.left <= 0 or 
+                    elem_rect.bottom - elem_rect.top <= 0):
+                    continue
+                    
+                # Create UI element with error handling
+                try:
+                    uia_wrapper = self._create_uia_wrapper(elem, elem_type, elem_name, elem_rect)
+                    if uia_wrapper:
+                        control_elements.append(uia_wrapper)
+                except Exception as e:
+                    logging.debug(f"Failed to create wrapper for element {n}: {e}")
+                    continue
+                    
+            except Exception as e:
+                logging.debug(f"Error processing element {n}: {e}")
                 continue
-                
+
+        return control_elements
+
+    def _create_uia_wrapper(self, elem, elem_type, elem_name, elem_rect) -> Optional[UIAWrapper]:
+        """
+        Create UIA wrapper with proper error handling.
+        """
+        try:
             element_info = UIAElementInfoFix(elem, True, source="uia")
             elem_type_name = UIABackendStrategy._get_uia_control_name_map().get(
                 elem_type, ""
             )
 
-            # handle is not needed, skip fetching
+            # Set cached properties
             element_info._cached_handle = 0
-
-            # visibility is determined by filter condition
             element_info._cached_visible = True
 
-            # fill the values with pre-fetched data
+            # Fill rectangle
             rect = pywinauto.win32structures.RECT()
             rect.left = elem_rect.left
             rect.top = elem_rect.top
@@ -289,25 +420,19 @@ class UIABackendStrategy(BackendStrategy):
             element_info._cached_rect = rect
             element_info._cached_name = elem_name
             element_info._cached_control_type = elem_type_name
-
-            # currently rich text is not used, skip fetching but use name as alternative
-            # this could be reverted if some control requires rich text
             element_info._cached_rich_text = elem_name
-
-            # class name is not used directly, could pre-fetch in future
-            # element_info.class_name
 
             uia_interface = UIAWrapper(element_info)
 
             def __hash__(self):
                 return hash(self.element_info._element)
 
-            # current __hash__ is not referring to a COM property (RuntimeId), which is costly to fetch
             uia_interface.__hash__ = __hash__
-
-            control_elements.append(uia_interface)
-
-        return control_elements
+            return uia_interface
+            
+        except Exception as e:
+            logging.debug(f"Failed to create UIA wrapper: {e}")
+            return None
 
     @staticmethod
     def _get_uia_control_id_map():
@@ -702,3 +827,73 @@ class ControlInspectorFacade:
         """
         desktop_element = UIAElementInfo()
         return UIAWrapper(desktop_element)
+
+    def find_control_elements_in_descendants(
+        self,
+        window: UIAWrapper,
+        control_type_list: List[str] = [],
+        class_name_list: List[str] = [],
+        title_list: List[str] = [],
+        is_visible: bool = True,
+        is_enabled: bool = True,
+        depth: int = 0,
+    ) -> List[UIAWrapper]:
+        """
+        Find control elements in descendants of the window with enhanced error handling.
+        """
+        if window is None:
+            logging.warning("Window is None, returning empty control list")
+            return []
+            
+        try:
+            if self.backend == "uia":
+                return self.backend_strategy.find_control_elements_in_descendants(
+                    window, control_type_list, [], title_list, is_visible, is_enabled, depth
+                )
+            elif self.backend == "win32":
+                return self.backend_strategy.find_control_elements_in_descendants(
+                    window, [], class_name_list, title_list, is_visible, is_enabled, depth
+                )
+            else:
+                logging.warning(f"Unsupported backend: {self.backend}")
+                return []
+                
+        except Exception as e:
+            logging.error(f"Error finding control elements: {str(e)}")
+            # Try fallback strategy
+            return self._fallback_control_search(window, control_type_list)
+    
+    def _fallback_control_search(self, window: UIAWrapper, control_type_list: List[str]) -> List[UIAWrapper]:
+        """
+        Fallback control search using simpler methods.
+        """
+        try:
+            logging.info("Attempting fallback control search")
+            
+            # Try to use basic descendants method without cache
+            if hasattr(window, 'descendants'):
+                descendants = window.descendants()
+                # Filter by control type if specified
+                if control_type_list:
+                    descendants = [
+                        d for d in descendants 
+                        if hasattr(d.element_info, 'control_type') and 
+                        d.element_info.control_type in control_type_list
+                    ]
+                return descendants[:100]  # Limit to prevent performance issues
+                
+        except Exception as e:
+            logging.error(f"Fallback control search also failed: {str(e)}")
+            
+        return []
+    
+    def safe_get_desktop_app_dict(self, remove_empty: bool = True) -> Dict[str, UIAWrapper]:
+        """
+        Safely get desktop app dict with error handling.
+        """
+        try:
+            return self.get_desktop_app_dict(remove_empty)
+        except Exception as e:
+            logging.error(f"Error getting desktop apps: {str(e)}")
+            # Return minimal safe dict
+            return {}

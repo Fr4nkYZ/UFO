@@ -14,6 +14,12 @@ from pywinauto.win32structures import RECT
 
 from ufo.automator.basic import CommandBasic, ReceiverBasic, ReceiverFactory
 from ufo.automator.puppeteer import ReceiverManager
+from ufo.automator.ui_control.smart_click_controller import (
+    SmartClickController, 
+    SmartClickConfig, 
+    should_trigger_smart_retry,
+    handle_element_not_enabled_exception
+)
 from ufo.config.config import Config
 from ufo.utils import print_with_color
 
@@ -44,13 +50,16 @@ class ControlReceiver(ReceiverBasic):
 
         self.control = control
         self.application = application
+        
+        # 初始化智能点击控制器
+        self.smart_click_controller = SmartClickController()
+        self._consecutive_click_failures = 0
 
         if control:
             self.control.set_focus()
             self.wait_enabled()
         elif application:
-            self.application.set_focus()
-
+            self.application.set_focus()    
     @property
     def type_name(self):
         return "UIControl"
@@ -68,6 +77,8 @@ class ControlReceiver(ReceiverBasic):
         try:
             method = getattr(self.control, method_name)
             result = method(**params)
+            # 成功执行，重置连续失败计数
+            self._consecutive_click_failures = 0
         except AttributeError:
             message = f"{self.control} doesn't have a method named {method_name}"
             print_with_color(f"Warning: {message}", "yellow")
@@ -76,8 +87,55 @@ class ControlReceiver(ReceiverBasic):
             full_traceback = traceback.format_exc()
             message = f"An error occurred: {full_traceback}"
             print_with_color(f"Warning: {message}", "yellow")
+            
+            # 检查是否为点击相关的方法且符合智能重试条件
+            if method_name in ["click", "click_input"] and self._should_trigger_smart_retry(e):
+                self._consecutive_click_failures += 1
+                print_with_color(f"Detected click failure #{self._consecutive_click_failures}: {str(e)[:100]}", "yellow")
+                
+                # 如果达到触发条件，启用智能重试
+                if should_trigger_smart_retry(e, self._consecutive_click_failures):
+                    print_with_color("Triggering smart click retry mechanism...", "cyan")
+                    try:
+                        # 获取控件的BoundingRectangle作为目标坐标
+                        target_coords = None
+                        if self.control:
+                            try:
+                                rect = self.control.rectangle()
+                                target_coords = (
+                                    rect.left + rect.width() // 2,
+                                    rect.top + rect.height() // 2
+                                )
+                            except Exception:
+                                pass
+                        
+                        # 创建原始点击函数的包装器
+                        def original_click_func(click_params):
+                            try:
+                                click_method = getattr(self.control, method_name)
+                                return click_method(**click_params)
+                            except Exception as ex:
+                                raise ex
+                        
+                        # 调用智能重试
+                        smart_result = self.smart_click_controller.smart_click_with_retry(
+                            original_click_func,
+                            params,
+                            self.control,
+                            self.application,
+                            target_coords
+                        )
+                        return smart_result
+                        
+                    except Exception as retry_error:
+                        print_with_color(f"Smart retry also failed: {retry_error}", "red")
+            
             result = message
         return result
+    
+    def _should_trigger_smart_retry(self, exception: Exception) -> bool:
+        """判断是否应该触发智能重试"""
+        return handle_element_not_enabled_exception(exception)
 
     def click_input(self, params: Dict[str, Union[str, bool]]) -> str:
         """
@@ -114,11 +172,53 @@ class ControlReceiver(ReceiverBasic):
 
         self.application.set_focus()
 
-        pyautogui.click(
-            tranformed_x, tranformed_y, button=button, clicks=2 if double else 1
-        )
-
-        return ""
+        try:
+            pyautogui.click(
+                tranformed_x, tranformed_y, button=button, clicks=2 if double else 1
+            )
+            # 成功执行，重置连续失败计数
+            self._consecutive_click_failures = 0
+            return ""
+        except Exception as e:
+            self._consecutive_click_failures += 1
+            print_with_color(f"Coordinate click failure #{self._consecutive_click_failures}: {str(e)}", "yellow")
+            
+            # 检查是否应该触发智能重试
+            if should_trigger_smart_retry(e, self._consecutive_click_failures):
+                print_with_color("Triggering smart retry for coordinate click...", "cyan")
+                
+                try:
+                    # 创建原始点击函数的包装器
+                    def original_click_func(click_params):
+                        click_x = float(click_params.get("x", 0))
+                        click_y = float(click_params.get("y", 0))
+                        click_button = click_params.get("button", "left")
+                        click_double = click_params.get("double", False)
+                        
+                        # 转换为绝对坐标
+                        abs_x, abs_y = self.transform_point(click_x, click_y)
+                        
+                        # 执行点击
+                        pyautogui.click(
+                            abs_x, abs_y, button=click_button, clicks=2 if click_double else 1
+                        )
+                        return ""
+                    
+                    # 使用智能重试
+                    smart_result = self.smart_click_controller.smart_click_with_retry(
+                        original_click_func,
+                        params,
+                        None,  # 没有特定的控件
+                        self.application,
+                        (tranformed_x, tranformed_y)  # 目标坐标
+                    )
+                    return smart_result
+                    
+                except Exception as retry_error:
+                    print_with_color(f"Smart coordinate click retry failed: {retry_error}", "red")
+                    raise e
+            else:
+                raise e
 
     def drag_on_coordinates(self, params: Dict[str, str]) -> str:
         """

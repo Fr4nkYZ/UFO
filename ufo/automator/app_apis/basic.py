@@ -24,15 +24,50 @@ class WinCOMReceiverBasic(ReceiverBasic):
         :param process_name: The process name.
         :param clsid: The CLSID of the COM object.
         """
-
         self.app_root_name = app_root_name
         self.process_name = process_name
-
         self.clsid = clsid
 
-        self.client = win32com.client.Dispatch(self.clsid)
-        self.com_object = self.get_object_from_process_name()
+        print(f"DEBUG: Initializing WinCOMReceiver")
+        print(f"DEBUG: app_root_name = {self.app_root_name}")
+        print(f"DEBUG: process_name = {self.process_name}")
+        print(f"DEBUG: clsid = {self.clsid}")
 
+        try:
+            self.client = win32com.client.Dispatch(self.clsid)
+            print(f"DEBUG: COM client created successfully")
+        except Exception as e:
+            print(f"DEBUG: Failed to create COM client: {e}")
+            self.client = None
+
+        if self.client:
+            self.com_object = self.get_object_from_process_name()
+            print(f"DEBUG: com_object = {self.com_object}")
+            print(f"DEBUG: com_object type = {type(self.com_object)}")
+        else:
+            self.com_object = None
+
+        self.debug_com_state()
+        
+    def debug_com_state(self):
+        """
+        Debug helper to check COM state
+        """
+        print(f"DEBUG: === COM State Debug ===")
+        print(f"DEBUG: client = {self.client}")
+        print(f"DEBUG: client type = {type(self.client)}")
+        
+        if self.client:
+            try:
+                print(f"DEBUG: client.Name = {getattr(self.client, 'Name', 'No Name attribute')}")
+                print(f"DEBUG: client.Application = {getattr(self.client, 'Application', 'No Application attribute')}")
+            except Exception as e:
+                print(f"DEBUG: Error accessing client properties: {e}")
+        
+        print(f"DEBUG: com_object = {self.com_object}")
+        print(f"DEBUG: com_object type = {type(self.com_object)}")
+        print(f"DEBUG: === End COM State Debug ===")
+        
     @abstractmethod
     def get_object_from_process_name(self) -> win32com.client.CDispatch:
         """
